@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KPGAME</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #1b263b; font-family: 'Segoe UI', sans-serif; }
+        #topbar {
+          position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+          display: flex; gap: 8px; z-index: 20; background: rgba(15, 23, 42, 0.85);
+          padding: 6px 12px; border-radius: 24px; align-items: center; color: #fff; font-size: 12px;
+          border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+          white-space: nowrap;
+        }
+        .btn-top {
+          background: #e07a5f; color: #fff; border: none; padding: 4px 9px;
+          border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 11px;
+        }
+        .btn-top.active { background: #81b29a; color: #0f172a; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        .touch-controls {
+          position: absolute; bottom: 16px; left: 0; width: 100%;
+          display: flex; justify-content: space-between; padding: 0 26px;
+          pointer-events: none; z-index: 15;
+        }
+        .dpad, .actions { display: flex; gap: 16px; pointer-events: auto; }
+        .t-btn {
+          width: 66px; height: 66px; border-radius: 50%;
+          background: rgba(255,255,255,0.28); border: 3px solid rgba(255,255,255,0.75);
+          color: #fff; font-size: 26px; font-weight: bold;
+          display: flex; align-items: center; justify-content: center;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.25); touch-action: none;
+        }
+        .t-btn:active { background: rgba(255,255,255,0.65); transform: scale(0.93); }
+    </style>
+</head>
+<body>
+
+<div id="topbar">
+    <span>🐾 <b>KPGAME</b></span>
+    <span id="hud-lives">❤️❤️❤️</span>
+    <span id="hud-trash">♻️ Lixo: 0/6</span>
+    <span id="hud-fruit">🍊/🐾: 0</span>
+    <button class="btn-top active" id="btn-lvl1" onclick="loadLevel(1)">🌳 1:Rio</button>
+    <button class="btn-top" id="btn-lvl2" onclick="loadLevel(2)">🪵 2:Mata</button>
+    <button class="btn-top" id="btn-lvl3" onclick="loadLevel(3)">🦅 3:Caça</button>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<div class="touch-controls">
+    <div class="dpad">
+        <div class="t-btn" id="btn-left">◀</div>
+        <div class="t-btn" id="btn-right">▶</div>
+    </div>
+    <div class="actions">
+        <div class="t-btn" id="btn-jump">▲</div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let W = window.innerWidth, H = window.innerHeight;
+    function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // --- MOTOR DE ÁUDIO WEB AUDIO API ---
+    let audioCtx = null;
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    const SFX = {
+      jump() {
+        initAudio();
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(450, audioCtx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+      },
+      collect() {
+        initAudio();
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+      },
+      hit() {
+        initAudio();
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+        osc.frequency.linearRampToValueAtTime(40, audioCtx.currentTime + 0.25);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.25);
+      },
+      win() {
+        initAudio();
+        let notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((freq, idx) => {
+          let osc = audioCtx.createOscillator();
+          let gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, audioCtx.currentTime + idx * 0.12);
+          gain.gain.setValueAtTime(0.15, audioCtx.currentTime + idx * 0.12);
+          gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + idx * 0.12 + 0.2);
+          osc.connect(gain); gain.connect(audioCtx.destination);
+          osc.start(audioCtx.currentTime + idx * 0.12);
+          osc.stop(audioCtx.currentTime + idx * 0.12 + 0.2);
+        });
+      }
+    };
+
+    let musicTimer = 0;
+    function updateMusic() {
+      if (!audioCtx || audioCtx.state !== 'running') return;
+      musicTimer++;
+      if (musicTimer % 80 === 0) {
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        let baseFreq = currentLevel === 1 ? 220 : (currentLevel === 2 ? 164.81 : 196);
+        let note = baseFreq * (Math.random() > 0.7 ? 1.5 : 1);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(note, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+      }
+    }
+
+    // --- ESTADO DO JOGO ---
+    let currentLevel = 1;
+    let keys = { left: false, right: false };
+    let cameraX = 0;
+    let globalTick = 0;
+    let trashCollected = 0;
+    let fruitsCollected = 0;
+    let lives = 3;
+    let gameOver = false;
+    let gameWon = false;
+    let hasBird = false;
+    let msgBanner = "";
+    let msgTimer = 0;
+
+    const capy = {
+      x: 100, y: 100, vx: 0, vy: 0,
+      w: 46, h: 58,
+      dir: 1, grounded: false, jumps: 0, maxJumps: 1,
+      animTick: 0, invuln: 0,
+      safeX: 80, safeY: 100
+    };
+
+    let platforms = [], items = [], clouds = [], bgTrees = [], particles = [];
+    let cagedBird = null, boss = null, barrels = [], traps = [];
+
+    for (let i = 0; i < 14; i++) {
+      clouds.push({ x: i * 280 + Math.random() * 100, y: 35 + Math.random() * 85, s: 0.6 + Math.random() * 0.6 });
+    }
+    for (let i = 0; i < 22; i++) {
+      bgTrees.push({
+        x: i * 160 + 40,
+        type: i > 14 ? 'chimney' : 'round',
+        h: 70 + (i % 3) * 22
+      });
+    }
+
+    function spawnParticles(x, y, color, count = 10) {
+      for (let i = 0; i < count; i++) {
+        particles.push({
+          x, y,
+          vx: (Math.random() - 0.5) * 7,
+          vy: (Math.random() - 0.8) * 7,
+          life: 30, color
+        });
+      }
+    }
+
+    function loadLevel(lvl) {
+      initAudio();
+      currentLevel = lvl;
+      document.getElementById('btn-lvl1').classList.toggle('active', lvl === 1);
+      document.getElementById('btn-lvl2').classList.toggle('active', lvl === 2);
+      document.getElementById('btn-lvl3').classList.toggle('active', lvl === 3);
+
+      const gY = H - 68;
+      capy.x = 80; capy.y = gY - capy.h; capy.vx = 0; capy.vy = 0;
+      capy.safeX = 80; capy.safeY = gY - capy.h;
+      cameraX = 0; barrels = []; particles = []; traps = []; gameOver = false; gameWon = false;
+
+      if (lvl === 1) {
+        trashCollected = 0;
+        fruitsCollected = 0;
+        hasBird = false;
+        capy.maxJumps = 1;
+        updateHUD();
+        msgBanner = "❗ Lixo na lagoa! Suba o rio até a fábrica!";
+        msgTimer = 240;
+
+        platforms = [
+          { x: 0, y: gY, w: 720, h: 120, type: 'grass' },
+          { x: 800, y: gY - 45, w: 260, h: 165, type: 'grass' },
+          { x: 1130, y: gY - 105, w: 190, h: 32, type: 'log' },
+          { x: 1390, y: gY - 25, w: 580, h: 145, type: 'grass' },
+          { x: 2040, y: gY - 85, w: 180, h: 32, type: 'log' },
+          { x: 2290, y: gY - 145, w: 190, h: 32, type: 'crate' },
+          { x: 2550, y: gY - 50, w: 800, h: 170, type: 'factory' }
+        ];
+
+        items = [
+          { x: 250, y: gY - 38, kind: 'bottle', collected: false, first: true },
+          { x: 420, y: gY - 85, kind: 'tangerine', collected: false },
+          { x: 590, y: gY - 36, kind: 'can', collected: false },
+          { x: 910, y: gY - 82, kind: 'tire', collected: false },
+          { x: 980, y: gY - 135, kind: 'tangerine', collected: false },
+          { x: 1215, y: gY - 145, kind: 'bottle', collected: false },
+          { x: 1520, y: gY - 110, kind: 'tangerine', collected: false },
+          { x: 1820, y: gY - 62, kind: 'can', collected: false },
+          { x: 2120, y: gY - 125, kind: 'tangerine', collected: false },
+          { x: 2375, y: gY - 185, kind: 'tire', collected: false }
+        ];
+
+        cagedBird = { x: 1660, y: gY - 70, freed: false };
+        boss = {
+          x: 2750, y: gY - 195, w: 170, h: 195,
+          hp: 3, maxHp: 3, timer: 0, hitCooldown: 0, defeated: false, type: 'factory'
+        };
+
+      } else if (lvl === 2) {
+        hasBird = true;
+        capy.maxJumps = 2;
+        cagedBird = null;
+        updateHUD();
+        msgBanner = "🪵 FASE 2: Desmatamento! Cuidado com plataformas que caem e o lenhador!";
+        msgTimer = 260;
+
+        platforms = [
+          { x: 0, y: gY, w: 650, h: 120, type: 'grass' },
+          { x: 730, y: gY - 60, w: 180, h: 30, type: 'falling', triggered: false, dropTimer: 0 },
+          { x: 1000, y: gY - 120, w: 180, h: 30, type: 'falling', triggered: false, dropTimer: 0 },
+          { x: 1280, y: gY - 30, w: 600, h: 150, type: 'grass' },
+          { x: 1970, y: gY - 90, w: 180, h: 30, type: 'falling', triggered: false, dropTimer: 0 },
+          { x: 2240, y: gY - 50, w: 850, h: 170, type: 'forest' }
+        ];
+
+        items = [
+          { x: 350, y: gY - 40, kind: 'tangerine', collected: false },
+          { x: 800, y: gY - 90, kind: 'tangerine', collected: false },
+          { x: 1100, y: gY - 150, kind: 'bottle', collected: false },
+          { x: 1550, y: gY - 70, kind: 'can', collected: false }
+        ];
+
+        boss = {
+          x: 2600, y: gY - 195, w: 170, h: 195,
+          hp: 3, maxHp: 3, timer: 0, hitCooldown: 0, defeated: false, type: 'lumberjack'
+        };
+
+      } else {
+        hasBird = true;
+        capy.maxJumps = 2;
+        cagedBird = null;
+        updateHUD();
+        msgBanner = "🦅 FASE 3: Área de Caçadores! Desvie das armadilhas e liberte os animais!";
+        msgTimer = 280;
+
+        platforms = [
+          { x: 0, y: gY, w: 750, h: 120, type: 'grass' },
+          { x: 830, y: gY - 70, w: 220, h: 30, type: 'log' },
+          { x: 1150, y: gY - 30, w: 650, h: 150, type: 'grass' },
+          { x: 1900, y: gY - 110, w: 220, h: 30, type: 'log' },
+          { x: 2220, y: gY - 50, w: 850, h: 170, type: 'camp' }
+        ];
+
+        traps = [
+          { x: 500, y: gY - 20 },
+          { x: 920, y: gY - 90 },
+          { x: 1400, y: gY - 20 },
+          { x: 2000, y: gY - 130 }
+        ];
+
+        items = [
+          { x: 320, y: gY - 35, kind: 'cage', collected: false },
+          { x: 880, y: gY - 100, kind: 'tangerine', collected: false },
+          { x: 1350, y: gY - 35, kind: 'cage', collected: false }
+        ];
+
+        boss = {
+          x: 2650, y: gY - 195, w: 170, h: 195,
+          hp: 3, maxHp: 3, timer: 0, hitCooldown: 0, defeated: false, type: 'hunter'
+        };
+      }
+    }
+
+    function updateHUD() {
+      let hearts = "";
+      for (let i = 0; i < lives; i++) hearts += "❤️";
+      document.getElementById('hud-lives').innerText = hearts || "🖤";
+      document.getElementById('hud-trash').innerText = currentLevel === 1 ? `♻️ Lixo: ${trashCollected}/6` : `🐾 Animais: ${fruitsCollected}`;
+      document.getElementById('hud-fruit').innerText = `🍊: ${fruitsCollected}`;
+    }
+
+    function loseLife() {
+      if (capy.invuln > 0 || gameOver || gameWon) return;
+      SFX.hit();
+      lives--;
+      updateHUD();
+      if (lives <= 0) {
+        gameOver = true;
+        msgBanner = "💀 GAME OVER! Toque em qualquer botão para reiniciar.";
+        msgTimer = 9999;
+      } else {
+        capy.x = capy.safeX;
+        capy.y = capy.safeY - 15;
+        capy.vy = -6;
+        capy.invuln = 75;
+        msgBanner = "💥 Ai! Perdeu um coração!";
+        msgTimer = 110;
+      }
+    }
+
+    function doJump() {
+      initAudio();
+      if (gameOver || gameWon) {
+        lives = 3; trashCollected = 0; fruitsCollected = 0;
+        gameOver = false; gameWon = false; loadLevel(1); return;
+      }
+      if (capy.grounded) {
+        SFX.jump();
+        capy.vy = -12.2;
+        capy.grounded = false;
+        capy.jumps = 1;
+      } else if (capy.jumps < capy.maxJumps) {
+        SFX.jump();
+        capy.vy = -11.2;
+        capy.jumps++;
+        spawnParticles(capy.x + 20, capy.y + 50, "#caf0f8", 8);
+      }
+    }
+
+    window.addEventListener('keydown', e => {
+      initAudio();
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
+      if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') doJump();
+    });
+    window.addEventListener('keyup', e => {
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+    });
+
+    function bindTouch(id, onDown, onUp) {
+      const el = document.getElementById(id);
+      el.addEventListener('touchstart', e => { e.preventDefault(); initAudio(); onDown(); });
+      el.addEventListener('touchend', e => { e.preventDefault(); if (onUp) onUp(); });
+      el.addEventListener('mousedown', e => { e.preventDefault(); initAudio(); onDown(); });
+      el.addEventListener('mouseup', e => { e.preventDefault(); if (onUp) onUp(); });
+    }
+    bindTouch('btn-left', () => keys.left = true, () => keys.left = false);
+    bindTouch('btn-right', () => keys.right = true, () => keys.right = false);
+    bindTouch('btn-jump', () => doJump(), null);
+
+    function update() {
+      globalTick++;
+      updateMusic();
+      if (msgTimer > 0 && !gameOver && !gameWon) msgTimer--;
+      if (capy.invuln > 0) capy.invuln--;
+      if (gameOver || gameWon) return;
+
+      if (keys.left) { capy.vx = -2.0; capy.dir = -1; capy.animTick += 0.11; }
+      else if (keys.right) { capy.vx = 2.0; capy.dir = 1; capy.animTick += 0.11; }
+      else { capy.vx *= 0.72; capy.animTick = 0; }
+
+      capy.x += capy.vx;
+      if (capy.x < 0) capy.x = 0;
+
+      capy.vy = Math.min(capy.vy + 0.62, 13);
+      const prevBottom = capy.y + capy.h;
+      capy.y += capy.vy;
+      capy.grounded = false;
+
+      // Atualizar queda das plataformas de forma suave e com a capivara em cima
+      for (let p of platforms) {
+        if (p.type === 'falling' && p.triggered && p.dropTimer > 0) {
+          p.dropTimer--;
+          p.y += 0.4;
+
+          if (capy.grounded && capy.x + capy.w - 6 > p.x && capy.x + 6 < p.x + p.w && Math.abs((capy.y + capy.h) - p.y) < 6) {
+            capy.y = p.y - capy.h;
+            capy.vy = 0;
+            capy.grounded = true;
+            capy.jumps = 0;
+          }
+        }
+      }
+
+      for (let p of platforms) {
+        if (p.type === 'falling' && p.triggered && p.dropTimer <= 0) continue;
+        if (capy.x + capy.w - 6 > p.x && capy.x + 6 < p.x + p.w) {
+          if (capy.vy >= 0 && prevBottom <= p.y + 14 && capy.y + capy.h >= p.y) {
+            capy.y = p.y - capy.h;
+            capy.vy = 0;
+            capy.grounded = true;
+            capy.jumps = 0;
+            capy.safeX = Math.max(p.x + 12, Math.min(capy.x, p.x + p.w - capy.w - 12));
+            capy.safeY = p.y - capy.h;
+
+            if (p.type === 'falling' && !p.triggered) {
+              p.triggered = true;
+              p.dropTimer = 220;
+            }
+          }
+        }
+      }
+
+      for (let t of traps) {
+        if (Math.abs((capy.x + 23) - t.x) < 24 && Math.abs((capy.y + 29) - t.y) < 24) {
+          loseLife();
+        }
+      }
+
+      const waterLevel = H - 54;
+      if (!capy.grounded && capy.y + capy.h >= waterLevel) {
+        spawnParticles(capy.x + capy.w / 2, waterLevel, "#90e0ef", 16);
+        loseLife();
+      }
+
+      for (let it of items) {
+        if (!it.collected && Math.abs((capy.x + 23) - it.x) < 34 && Math.abs((capy.y + 29) - it.y) < 38) {
+          it.collected = true;
+          SFX.collect();
+          if (it.kind === 'tangerine') {
+            fruitsCollected++;
+            spawnParticles(it.x, it.y, "#ff9f1c", 10);
+          } else if (it.kind === 'cage') {
+            fruitsCollected += 2;
+            spawnParticles(it.x, it.y, "#00b4d8", 15);
+            msgBanner = "🐾 Animal libertado da gaiola com sucesso!";
+            msgTimer = 160;
+          } else {
+            trashCollected++;
+            spawnParticles(it.x, it.y, "#80ed99", 10);
+            if (it.first) {
+              msgBanner = "♻️ Garrafa recolhida! Continue limpando o caminho!";
+              msgTimer = 190;
+            }
+          }
+          updateHUD();
+        }
+      }
+
+      if (cagedBird && !cagedBird.freed) {
+        if (Math.abs((capy.x + 23) - cagedBird.x) < 44 && Math.abs((capy.y + 29) - cagedBird.y) < 48) {
+          cagedBird.freed = true;
+          hasBird = true;
+          capy.maxJumps = 2;
+          SFX.win();
+          spawnParticles(cagedBird.x, cagedBird.y, "#00b4d8", 14);
+          updateHUD();
+          msgBanner = "🐦 Passarinho salvo! PULO DUPLO ativado!";
+          msgTimer = 240;
+        }
+      }
+
+      if (boss && !boss.defeated) {
+        if (boss.hitCooldown > 0) boss.hitCooldown--;
+        boss.timer++;
+        if (boss.timer % 150 === 0) {
+          let hazardSpeed = currentLevel === 3 ? -2.4 : -1.8;
+          barrels.push({ x: boss.x - 15, y: boss.y + boss.h - 36, vx: hazardSpeed, r: 18, rot: 0 });
+        }
+
+        const headX = boss.x + 35, headY = boss.y - 22, headW = 100, headH = 30;
+        if (capy.vy > 0 && capy.x + capy.w > headX && capy.x < headX + headW &&
+            capy.y + capy.h >= headY && capy.y + capy.h <= headY + headH + 18 && boss.hitCooldown === 0) {
+          boss.hp--;
+          boss.hitCooldown = 45;
+          capy.vy = -13.0;
+          SFX.hit();
+          spawnParticles(headX + 50, headY, "#e63946", 14);
+          if (boss.hp <= 0) {
+            boss.defeated = true;
+            barrels = [];
+            SFX.win();
+            spawnParticles(boss.x + 85, boss.y + 60, "#52b788", 25);
+            if (currentLevel < 3) {
+              msgBanner = `🎉 Vitória na Fase ${currentLevel}! Avançando...`;
+              msgTimer = 220;
+              setTimeout(() => loadLevel(currentLevel + 1), 2200);
+            } else {
+              gameWon = true;
+            }
+          } else {
+            msgBanner = `💥 Atingido! Faltam ${boss.hp} golpes!`;
+            msgTimer = 140;
+          }
+        }
+      }
+
+      for (let i = barrels.length - 1; i >= 0; i--) {
+        let b = barrels[i];
+        b.x += b.vx;
+        b.rot -= 0.05;
+        if (!boss?.defeated && Math.abs((capy.x + 23) - b.x) < 28 && Math.abs((capy.y + 29) - b.y) < 28) {
+          loseLife();
+        }
+        if (b.x < -50) barrels.splice(i, 1);
+      }
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+        let pt = particles[i];
+        pt.x += pt.vx; pt.y += pt.vy; pt.life--;
+        if (pt.life <= 0) particles.splice(i, 1);
+      }
+
+      let maxScroll = currentLevel === 1 ? 2420 : (currentLevel === 2 ? 2100 : 2100);
+      let targetCam = capy.x - W * 0.32;
+      cameraX += (Math.max(0, Math.min(maxScroll, targetCam)) - cameraX) * 0.1;
+    }
+
+    function drawItem(it) {
+      const bob = Math.sin(globalTick * 0.08 + it.x) * 4;
+      const x = it.x, y = it.y + bob;
+      ctx.save();
+      ctx.lineWidth = 2;
+
+      if (it.kind === 'tangerine') {
+        ctx.fillStyle = "#ff9f1c"; ctx.strokeStyle = "#9b2226";
+        ctx.beginPath(); ctx.ellipse(x, y, 13, 11, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = "#2ec4b6";
+        ctx.beginPath(); ctx.ellipse(x + 3, y - 12, 6, 3, -0.4, 0, Math.PI * 2); ctx.fill();
+      } else if (it.kind === 'cage') {
+        ctx.strokeStyle = "#343a40"; ctx.lineWidth = 3;
+        ctx.strokeRect(x - 16, y - 18, 32, 36);
+        ctx.beginPath(); ctx.moveTo(x - 16, y); ctx.lineTo(x + 16, y); ctx.stroke();
+        ctx.fillStyle = "#ffb703"; ctx.beginPath(); ctx.arc(x, y + 4, 8, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#111"; ctx.beginPath(); ctx.arc(x - 3, y + 2, 1.5, 0, Math.PI * 2); ctx.arc(x + 3, y + 2, 1.5, 0, Math.PI * 2); ctx.fill();
+      } else if (it.kind === 'bottle') {
+        ctx.translate(x, y); ctx.rotate(0.25);
+        ctx.fillStyle = "rgba(144, 224, 239, 0.85)"; ctx.strokeStyle = "#0077b6";
+        ctx.beginPath(); ctx.roundRect(-9, -14, 18, 28, 5); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = "#e63946"; ctx.fillRect(-9, -4, 18, 9);
+        ctx.fillRect(-5, -20, 10, 6);
+      } else if (it.kind === 'can') {
+        ctx.fillStyle = "#adb5bd"; ctx.strokeStyle = "#343a40";
+        ctx.beginPath(); ctx.roundRect(x - 9, y - 12, 18, 24, 4); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = "#f77f00"; ctx.fillRect(x - 8, y - 4, 16, 8);
+      } else if (it.kind === 'tire') {
+        ctx.fillStyle = "#212529"; ctx.strokeStyle = "#495057"; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(x, y, 16, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = "#6c757d";
+        ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawCapybara(x, y) {
+      if (capy.invuln > 0 && Math.floor(capy.invuln / 4) % 2 === 0) return;
+      ctx.save();
+      ctx.translate(x + capy.w / 2, y + capy.h / 2);
+      ctx.scale(capy.dir, 1);
+
+      const jumping = !capy.grounded;
+      const legSwing = Math.sin(capy.animTick) * 7;
+
+      ctx.lineWidth = 3; ctx.strokeStyle = "#432818";
+
+      ctx.fillStyle = "#b07d4f";
+      ctx.beginPath();
+      ctx.roundRect(-14 + legSwing, 16, 11, 14, 5);
+      ctx.roundRect(4 - legSwing, 16, 11, 14, 5);
+      ctx.fill(); ctx.stroke();
+
+      ctx.fillStyle = "#c68b59";
+      ctx.beginPath(); ctx.ellipse(0, 4, 19, 21, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+      ctx.fillStyle = "#eacda3";
+      ctx.beginPath(); ctx.ellipse(6, 5, 11, 14, 0, 0, Math.PI * 2); ctx.fill();
+
+      ctx.fillStyle = "#c68b59";
+      ctx.beginPath(); ctx.roundRect(-12, -28, 34, 24, 11); ctx.fill(); ctx.stroke();
+
+      ctx.fillStyle = "#9c6644";
+      ctx.beginPath(); ctx.roundRect(10, -25, 13, 19, 7); ctx.fill(); ctx.stroke();
+
+      ctx.beginPath();
+      ctx.ellipse(-6, -30, 4, 5, -0.3, 0, Math.PI * 2);
+      ctx.ellipse(2, -30, 4, 5, 0.2, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+
+      ctx.fillStyle = "#111";
+      ctx.beginPath(); ctx.arc(3, -19, 2.8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.beginPath(); ctx.arc(4, -20, 1, 0, Math.PI * 2); ctx.fill();
+
+      ctx.fillStyle = "#b07d4f";
+      ctx.beginPath();
+      if (jumping) ctx.roundRect(-6, -12, 9, 18, 4);
+      else ctx.roundRect(-2, -1, 16, 8, 4);
+      ctx.fill(); ctx.stroke();
+
+      if (hasBird) {
+        ctx.fillStyle = "#ff9f1c";
+        ctx.beginPath(); ctx.arc(5, -32, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = "#00b4d8";
+        ctx.beginPath(); ctx.arc(-4, -36, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawBackground() {
+      const isClean = boss && boss.defeated;
+      const pollutionFactor = isClean ? 0 : (currentLevel === 3 ? 1 : Math.min(1, cameraX / 2100));
+
+      const skyGrad = ctx.createLinearGradient(0, 0, 0, H);
+      skyGrad.addColorStop(0, pollutionFactor > 0.6 ? "#495057" : "#48cae4");
+      skyGrad.addColorStop(1, pollutionFactor > 0.6 ? "#adb5bd" : "#d8f3dc");
+      ctx.fillStyle = skyGrad; ctx.fillRect(0, 0, W, H);
+
+      ctx.fillStyle = pollutionFactor > 0.6 ? "rgba(255, 183, 3, 0.45)" : "#ffd166";
+      ctx.beginPath(); ctx.arc(W - 110, 75, 38, 0, Math.PI * 2); ctx.fill();
+
+      ctx.save();
+      ctx.translate(-cameraX * 0.2, 0);
+      for (let c of clouds) {
+        ctx.fillStyle = pollutionFactor > 0.6 ? "rgba(108,117,125,0.6)" : "rgba(255,255,255,0.85)";
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, 22 * c.s, 0, Math.PI * 2);
+        ctx.arc(c.x + 18 * c.s, c.y - 6 * c.s, 26 * c.s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      ctx.save();
+      ctx.translate(-cameraX * 0.35, 0);
+      for (let i = 0; i < 9; i++) {
+        ctx.fillStyle = (!isClean && (i > 5 || currentLevel >= 2)) ? "#495057" : "#74c69d";
+        ctx.beginPath();
+        ctx.moveTo(i * 260 - 60, H - 55);
+        ctx.lineTo(i * 260 + 90, H - 220 - (i % 2) * 35);
+        ctx.lineTo(i * 260 + 250, H - 55);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      ctx.save();
+      ctx.translate(-cameraX * 0.6, 0);
+      for (let t of bgTrees) {
+        const base = H - 62;
+        if (t.type === 'chimney' || currentLevel >= 2) {
+          ctx.fillStyle = "#343a40";
+          ctx.fillRect(t.x, base - t.h - 30, 28, t.h + 30);
+          ctx.fillStyle = isClean ? "#52b788" : "#e63946";
+          ctx.fillRect(t.x, base - t.h - 20, 28, 8);
+
+          if (!isClean) {
+            const smokeY = (globalTick * 0.8 + t.x) % 55;
+            ctx.fillStyle = "rgba(108, 117, 125, 0.6)";
+            ctx.beginPath();
+            ctx.arc(t.x + 14, base - t.h - 40 - smokeY, 14 + smokeY * 0.25, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else {
+          ctx.fillStyle = "#582f0e"; ctx.fillRect(t.x + 10, base - t.h, 12, t.h);
+          ctx.fillStyle = "#40916c";
+          ctx.beginPath(); ctx.arc(t.x + 16, base - t.h, 28, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+
+    function draw() {
+      drawBackground();
+
+      ctx.save();
+      ctx.translate(-cameraX, 0);
+
+      const isClean = boss && boss.defeated;
+
+      ctx.fillStyle = currentLevel === 1 ? "#0077b6" : (currentLevel === 2 ? "#2d6a4f" : "#4a5759");
+      ctx.fillRect(0, H - 56, 3600, 65);
+
+      for (let p of platforms) {
+        if (p.type === 'falling' && p.triggered && p.dropTimer <= 0) continue;
+        ctx.fillStyle = p.type === 'falling' ? "#bc6c25" : (p.type === 'factory' || p.type === 'forest' || p.type === 'camp' ? "#343a40" : "#6c4627");
+        ctx.beginPath(); ctx.roundRect(p.x, p.y, p.w, p.h, 8); ctx.fill();
+
+        if (p.type === 'factory' || p.type === 'forest' || p.type === 'camp') {
+          ctx.fillStyle = "#ffb703"; ctx.fillRect(p.x, p.y, p.w, 12);
+        } else if (p.type !== 'falling') {
+          ctx.fillStyle = currentLevel === 2 ? "#40916c" : "#52b788";
+          ctx.beginPath(); ctx.roundRect(p.x - 2, p.y, p.w + 4, 18, 6); ctx.fill();
+        }
+      }
+
+      for (let t of traps) {
+        ctx.fillStyle = "#d90429";
+        ctx.beginPath(); ctx.moveTo(t.x, t.y + 15); ctx.lineTo(t.x + 10, t.y - 10); ctx.lineTo(t.x + 20, t.y + 15); ctx.fill();
+      }
+
+      for (let it of items) if (!it.collected) drawItem(it);
+
+      if (cagedBird && !cagedBird.freed) {
+        ctx.fillStyle = "#00b4d8"; ctx.beginPath(); ctx.arc(cagedBird.x, cagedBird.y, 11, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = "#212529"; ctx.lineWidth = 3; ctx.strokeRect(cagedBird.x - 20, cagedBird.y - 20, 40, 40);
+        ctx.fillStyle = "#fff"; ctx.font = "bold 12px sans-serif"; ctx.fillText("SOCORRO!", cagedBird.x - 32, cagedBird.y - 26);
+      }
+
+      if (boss) {
+        ctx.save();
+        ctx.translate(boss.x, boss.y);
+        ctx.fillStyle = currentLevel === 1 ? "#2b2d42" : (currentLevel === 2 ? "#7f4f24" : "#386641");
+        ctx.fillRect(20, 50, 110, 110);
+        ctx.fillStyle = "#f8edeb"; ctx.beginPath(); ctx.arc(75, 30, 24, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#111";
+        ctx.fillRect(55, 10, 40, 14);
+        ctx.fillRect(65, 24, 6, 4);
+        ctx.fillRect(82, 24, 6, 4);
+
+        if (currentLevel === 1) {
+          ctx.fillStyle = "#e63946"; ctx.fillRect(20, -15, 75, 18);
+        } else if (currentLevel === 2) {
+          ctx.fillStyle = "#adb5bd"; ctx.fillRect(-25, 60, 45, 14);
+        } else {
+          ctx.fillStyle = "#212529"; ctx.fillRect(-20, 65, 40, 10);
+        }
+
+        if (!boss.defeated) {
+          ctx.fillStyle = "#fff"; ctx.font = "bold 13px sans-serif";
+          ctx.fillText(`CHEFE (${boss.hp}/3)`, 30, -28);
+        }
+        ctx.restore();
+      }
+
+      for (let b of barrels) {
+        ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.rot);
+        ctx.fillStyle = "#ffb703"; ctx.strokeStyle = "#111"; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(0, 0, b.r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = "#d90429"; ctx.fillRect(-10, -4, 20, 8);
+        ctx.restore();
+      }
+
+      for (let pt of particles) {
+        ctx.fillStyle = pt.color; ctx.beginPath(); ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2); ctx.fill();
+      }
+
+      drawCapybara(capy.x, capy.y);
+      ctx.restore();
+
+      if (gameOver) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.85)"; ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = "#e63946"; ctx.font = "bold 36px sans-serif"; ctx.textAlign = "center";
+        ctx.fillText("GAME OVER", W / 2, H / 2 - 30);
+        ctx.fillStyle = "#fff"; ctx.font = "18px sans-serif";
+        ctx.fillText("Toque na tela ou pule para tentar novamente", W / 2, H / 2 + 15);
+        ctx.textAlign = "left";
+      } else if (gameWon) {
+        ctx.fillStyle = "rgba(15, 23, 42, 0.92)"; ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = "#52b788"; ctx.font = "bold 38px sans-serif"; ctx.textAlign = "center";
+        ctx.fillText("🏆 PARABÉNS!", W / 2, H / 2 - 75);
+
+        ctx.fillStyle = "#ffd166"; ctx.font = "bold 20px sans-serif";
+        ctx.fillText("Você salvou a floresta e todos os animais!", W / 2, H / 2 - 25);
+
+        // Créditos atualizados do desenvolvedor
+        ctx.fillStyle = "#ffffff"; ctx.font = "bold 14px sans-serif";
+        ctx.fillText("Desenvolvedor: Thiago de Morais Marinho dos Santos", W / 2, H / 2 + 10);
+        ctx.fillText("E-mail: thiagomms@gmail.com", W / 2, H / 2 + 33);
+
+        let bounce = Math.sin(globalTick * 0.12) * 10;
+        ctx.fillStyle = "#ff9f1c"; ctx.beginPath(); ctx.arc(W / 2 - 70, H / 2 + 70 + bounce, 12, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#00b4d8"; ctx.beginPath(); ctx.arc(W / 2 + 70, H / 2 + 70 - bounce, 12, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#e63946"; ctx.font = "20px sans-serif";
+        ctx.fillText("❤️❤️❤️", W / 2, H / 2 + 110);
+
+        ctx.fillStyle = "#fff"; ctx.font = "bold 15px sans-serif";
+        ctx.fillText("🔄 Toque na tela para Jogar Novamente", W / 2, H / 2 + 150);
+        ctx.textAlign = "left";
+      } else if (msgTimer > 0) {
+        ctx.fillStyle = "rgba(15, 23, 42, 0.82)";
+        ctx.beginPath(); ctx.roundRect(W / 2 - 245, 50, 490, 36, 12); ctx.fill();
+        ctx.fillStyle = "#fff"; ctx.font = "bold 13px sans-serif"; ctx.textAlign = "center";
+        ctx.fillText(msgBanner, W / 2, 73); ctx.textAlign = "left";
+      }
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    loadLevel(1);
+    loop();
+</script>
+</body>
+</html>
