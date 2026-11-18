@@ -1,23 +1,23 @@
 <h1 align="center">🌲 KPGAME - Salve a Floresta! 🦫</h1>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/Platform-Android-3DDC84?style=flat-square&logo=android&logoColor=white" alt="Android" />
   <img src="https://img.shields.io/badge/HTML5-E34F26?style=flat-square&logo=html5&logoColor=white" alt="HTML5" />
   <img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black" alt="JavaScript" />
-  <img src="https://img.shields.io/badge/Canvas_API-00599C?style=flat-square" alt="Canvas API" />
   <img src="https://img.shields.io/badge/Status-Concluído-success?style=flat-square" alt="Status" />
 </p>
 
 ---
 
 ### 🚀 Sobre o Projeto
-O **KPGAME** é um jogo de plataforma 2D interativo voltado para a **conscientização ambiental**. No controle de uma corajosa capivara equipada com uma mochila de reciclagem, o jogador embarca em uma jornada para limpar rios, combater desmatamentos, desmantelar armadilhas de caça, limpar aterros e salvar animais ameaçados pela pesca ilegal.
+O **KPGAME** é um jogo de plataforma 2D mobile desenvolvido para a plataforma **Android** com foco na **conscientização ambiental**. No controle de uma capivara equipada com uma mochila de reciclagem, o jogador embarca em uma jornada para limpar rios, combater desmatamentos, desmantelar armadilhas de caça, limpar aterros e salvar animais ameaçados pela pesca ilegal.
 
-O jogo foi desenvolvido inteiramente em **HTML5 (Canvas)** e **JavaScript puro**, contando com renderização gráfica personalizada, efeitos sonoros dinâmicos via Web Audio API e suporte completo para dispositivos móveis (com controles de toque na tela).
+Embora utilize tecnologias web (`HTML5` e `JavaScript`) em sua engine gráfica, o projeto está estruturado e configurado como um **aplicativo Android nativo** gerenciado pelo Android Studio (`Gradle/Kotlin DSL`).
 
 ---
 
 ### 🗺️ Fases e Missões do Jogo
-O jogo é dividido em 5 fases temáticas progressivas, cada uma abordando um desafio ecológico diferente:
+O jogo conta com 5 fases temáticas progressivas:
 1. **🌳 Fase 1: Rio** — Detenha o poluidor da fábrica que está sujando as águas do rio.
 2. **🪵 Fase 2: Mata** — Enfrente o lenhador com motosserra para proteger a vegetação nativa.
 3. **🦅 Fase 3: Caça** — Resgate animais presos em gaiolas e desvie das armadilhas do caçador.
@@ -27,22 +27,22 @@ O jogo é dividido em 5 fases temáticas progressivas, cada uma abordando um des
 ---
 
 ### ✨ Principais Funcionalidades
-* **Mecânicas de Plataforma Avançadas:** Sistema de pulo simples e duplo, física de gravidade e mecânica de natação/flutuação na água.
-* **Áudio Dinâmico Integrado:** Efeitos sonoros e trilha sonora gerados em tempo real utilizando a **Web Audio API** nativa do navegador (sem dependência de arquivos externos de áudio pesados).
-* **Responsivo e Mobile-Friendly:** Controles na tela (D-pad e botão de pulo) otimizados para toque, além do suporte a teclado (setas e barra de espaço).
-* **Sistema de Ranking Local (`localStorage`):** Tabela de pontuação salva localmente com títulos honoríficos de guardião da natureza para os melhores jogadores.
+* **Aplicativo Android Nativo:** Estrutura completa de projeto mobile pronta para compilação (`.apk` / `.aab`).
+* **Mecânicas de Plataforma:** Sistema de pulo simples/duplo, física de gravidade e mecânica de natação/flutuação.
+* **Áudio Dinâmico Integrado:** Efeitos e trilha sonora gerados via Web Audio API.
+* **Controles Mobile Otimizados:** D-pad virtual e botões de toque na tela integrados ao ambiente Android.
+* **Sistema de Ranking Local (`localStorage`):** Tabela de pontuação salva no dispositivo.
 
 ---
 
 ### 💻 Tecnologias Utilizadas
-* **HTML5 Canvas:** Renderização gráfica 2D de alta performance.
-* **CSS3:** Estilização moderna da interface (HUD), menus e fontes estilizadas (*Baloo 2*).
-* **JavaScript (ES6+):** Lógica do jogo, colisões, tratamento de entrada de dados e controle de estados.
-* **Web Audio API:** Síntese de áudio procedural para efeitos sonoros e música de fundo.
+* **Mobile / IDE:** Android Studio, Gradle (`build.gradle.kts`)
+* **Engine / Frontend:** HTML5 Canvas, JavaScript (ES6+), CSS3
+* **Áudio:** Web Audio API
 
 ---
 
-### ⚙️ Como Executar o Projeto Localmente
+### ⚙️ Como Executar o Projeto
 
 1. **Clone o repositório:**
    ```bash
