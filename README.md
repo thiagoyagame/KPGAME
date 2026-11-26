@@ -14,18 +14,13 @@
 ---
 
 ### 🚀 Sobre o Projeto
-O **KPGAME** é um jogo de plataforma 2D mobile desenvolvido para a plataforma **Android** com foco na **conscientização ambiental**. No controle de uma capivara equipada com uma mochila de reciclagem, o jogador embarca em uma jornada para limpar rios, combater desmatamentos, desmantelar armadilhas de caça, limpar aterros e salvar animais ameaçados pela pesca ilegal[cite: 15, 16].
+O **KPGAME** é um jogo de plataforma 2D mobile desenvolvido para a plataforma **Android** com foco na **conscientização ambiental**. No controle de uma capivara equipada com uma mochila de reciclagem, o jogador embarca em uma jornada para limpar rios, combater desmatamentos, desmantelar armadilhas de caça, limpar aterros e salvar animais ameaçados pela pesca ilegal.
 
 Embora utilize tecnologias web (`HTML5` e `JavaScript`) em sua engine gráfica, o projeto está estruturado e configurado como um **aplicativo Android nativo** gerenciado pelo Android Studio (`Gradle/Kotlin DSL`).
 
 <p align="center">
   <img src="docs/fase1-rio.jpeg" alt="Gameplay da Fase 1: Rio no KPGAME" width="720" />
 </p>
-
-### 🚀 Sobre o Projeto
-O **KPGAME** é um jogo de plataforma 2D mobile desenvolvido para a plataforma **Android** com foco na **conscientização ambiental**. No controle de uma capivara equipada com uma mochila de reciclagem, o jogador embarca em uma jornada para limpar rios, combater desmatamentos, desmantelar armadilhas de caça, limpar aterros e salvar animais ameaçados pela pesca ilegal.
-
-Embora utilize tecnologias web (`HTML5` e `JavaScript`) em sua engine gráfica, o projeto está estruturado e configurado como um **aplicativo Android nativo** gerenciado pelo Android Studio (`Gradle/Kotlin DSL`).
 
 ---
 
