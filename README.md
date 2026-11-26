@@ -19,7 +19,7 @@ O **KPGAME** é um jogo de plataforma 2D mobile desenvolvido para a plataforma *
 Embora utilize tecnologias web (`HTML5` e `JavaScript`) em sua engine gráfica, o projeto está estruturado e configurado como um **aplicativo Android nativo** gerenciado pelo Android Studio (`Gradle/Kotlin DSL`).
 
 <p align="center">
-  <img src="docs/fase1-rio.jpg" alt="Gameplay da Fase 1: Rio no KPGAME" width="720" />
+  <img src="docs/fase1-rio.jpeg" alt="Gameplay da Fase 1: Rio no KPGAME" width="720" />
 </p>
 
 ### 🚀 Sobre o Projeto
